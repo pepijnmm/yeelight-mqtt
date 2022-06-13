@@ -1,8 +1,22 @@
+#forked for better home assistant(mqtt) support. it now is:
+for example:
+
+#kitchen lamp
+  - platform: "mqtt"
+    name: "kitchen_lamp"
+    state_topic: "yeelight/light/kitchen"
+    brightness: true
+    color_temp: true
+    rgb: true
+    schema: "json"
+    command_topic: "yeelight/light/kitchen/set"
+
 # Yeelight to MQTT bridge
 
 Works with Yeelight WiFi bulbs (color and monochrome).
 
-You need to activate developer mode (http://forum.yeelight.com/t/trying-to-enable-developer-mode-with-yeelight-app-lamp-always-offline/137)
+bottom part not valid anymore. just go to the yeelight app then lan managment and enable the light you wanna start using
+~You need to activate developer mode (http://forum.yeelight.com/t/trying-to-enable-developer-mode-with-yeelight-app-lamp-always-offline/137)~
 
 Bridge accept following MQTT set:
 ```

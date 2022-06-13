@@ -3,6 +3,7 @@ import os
 import logging
 from queue import Queue
 from threading import Thread
+import json
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ class Mqtt:
 	server = "localhost"
 	port = 1883
 	prefix = "home"
-	
+
 	_client = None
 	_sids = None
 	_queue = None
@@ -41,21 +42,21 @@ class Mqtt:
 		self._threads = []
 
 	def connect(self):
-		_LOGGER.info("Connecting to MQTT server " + self.server + ":" + str(self.port) + " with username (" + self.username + ":" + self.password + ")")
+		_LOGGER.info("Connecting to MQTT server " + self.server + ":" + str(self.port) + " with username (" + self.username + ")")
 		self._client = mqtt.Client()
 		if (self.username != "" and self.password != ""):
 			self._client.username_pw_set(self.username, self.password)
 		self._client.on_message = self._mqtt_process_message
 		self._client.on_connect = self._mqtt_on_connect
 		self._client.connect(self.server, self.port, 60)
-        
+
         #run message processing loop
 		t1 = Thread(target=self._mqtt_loop)
 		t1.start()
 		self._threads.append(t1)
 
-	def subscribe(self, model="+", name="+", prop="+", command="set"):
-		topic = self.prefix + "/" + model + "/" + name + "/" + prop + "/" + command
+	def subscribe(self, model="+", name="+", command="set"):
+		topic = self.prefix + "/" + model + "/" + name + "/" + command
 		_LOGGER.info("Subscibing to " + topic + ".")
 		self._client.subscribe(topic)
 
@@ -66,24 +67,37 @@ class Mqtt:
 			sid = sidprops.get("name",sid)
 
 		# _LOGGER.info("data is " + format(data))
-		PATH_FMT = self.prefix + "/{model}/{sid}/{prop}"
+		PATH_FMT = self.prefix + "/{model}/{sid}"
+		fullstring = {}
 		for key, value in data.items():
 			# fix for latest motion value
 			if (model == "motion" and key == "no_motion"):
 				key="status"
 				value="no_motion"
-			
-			# fix for rgb format
-			# if (key == "rgb" and self._is_int(value)):
-			# 	intval = int(value)
-			# 	blue =  (intval) & 255
-			# 	green = (intval >> 8) & 255
-			# 	red =  (intval >> 16) & 255
-			# 	value = str(red)+","+str(green)+","+str(blue)
 
-			topic = PATH_FMT.format(model=model, sid=sid, prop=key)
-			_LOGGER.info("Publishing message to topic " + topic + ": " + str(value) + ".")
-			self._client.publish(topic, payload=value, qos=0, retain=retain)
+			# fix for rgb format
+			if (key == "rgb" and self._is_int(value)):
+				intval = int(value)
+				blue =  (intval) & 255
+				green = (intval >> 8) & 255
+				red =  (intval >> 16) & 255
+				value = {"r":str(red),"g":str(green),"b":str(blue)}
+				key = "color"
+			if (key == "bright"):
+				value = int(int(value)/100*255)
+				key = "brightness"
+			if (key == "ct"):
+				key = "color_temp"
+				value = int(347/100*(100-100/4800*(int(value)-1700))+153)
+			if (key == "status"):
+				key = "state"
+
+			_LOGGER.info("Publishing message to topic " + key + ": " + str(value) + ".")
+			fullstring[key] = value
+
+
+		topic = PATH_FMT.format(model=model, sid=sid)
+		self._client.publish(topic, payload=json.dumps(fullstring), qos=0, retain=retain)
 
 	def _mqtt_on_connect(self, client, userdata, rc, unk):
 		_LOGGER.info("Connected to mqtt server.")
@@ -91,11 +105,11 @@ class Mqtt:
 	def _mqtt_process_message(self, client, userdata, msg):
 		_LOGGER.info("Processing message in " + str(msg.topic) + ": " + str(msg.payload) + ".")
 		parts = msg.topic.split("/")
-		if (len(parts) != 5):
+
+		if (len(parts) != 4):
 			return
 		model = parts[1]
 		query_sid = parts[2] #sid or name part
-		param = parts[3] #param part
 		value = (msg.payload).decode('utf-8')
 		if self._is_int(value):
 			value = int(value)
@@ -119,14 +133,14 @@ class Mqtt:
 				continue
 
 		# fix for rgb format
-		if (param == "rgb" and "," in str(value)):
-			arr = value.split(",")
-			r = int(arr[0])
-			g = int(arr[1])
-			b = int(arr[2])
-			value = int('%02x%02x%02x%02x' % (255, r, g, b), 16)
+		# if (param == "rgb" and "," in str(value)):
+		# 	arr = value.split(",")
+		# 	r = int(arr[0])
+		# 	g = int(arr[1])
+		# 	b = int(arr[2])
+		# 	value = int('%02x%02x%02x%02x' % (255, r, g, b), 16)
 
-		data = {'sid': sid, 'model': model, 'name': name, 'param':param, 'value':value}
+		data = {'sid': sid, 'model': model, 'name': name, 'value':value}
 		# put in process queuee
 		self._queue.put(data)
 

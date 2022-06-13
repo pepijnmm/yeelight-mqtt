@@ -59,7 +59,7 @@ def process_lamp_states(client):
 				hashold = bulb.hash()
 				bulb.update_properties(force=True)
 				hashnew = bulb.hash()
-				# _LOGGER.debug(str(bulb.name) + " ===> " + hashold + "-" + hashnew)
+				_LOGGER.debug(str(bulb.name) + " ===> " + hashold + "-" + hashnew)
 
 				if (hashold != hashnew):
 					_LOGGER.info("!!!! " + bulb.name + ":" + hashold + "->" + hashnew)
@@ -71,7 +71,7 @@ def process_lamp_states(client):
 def process_mqtt_messages(client):
 	global processNow, bulbs
 	while True:
-		try: 
+		try:
 			data = client._queue.get()
 			_LOGGER.debug("data from mqtt: " + format(data))
 
@@ -81,7 +81,7 @@ def process_mqtt_messages(client):
 			for bulb in bulbs:
 				if (bulb.ip != sid):
 					continue
-				bulb.process_command(param, value)
+				bulb.process_command(json.loads(str(value)))
 				processNow=True
 
 			client._queue.task_done()
@@ -90,14 +90,17 @@ def process_mqtt_messages(client):
 
 if __name__ == "__main__":
 	_LOGGER.info("Loading config file...")
-	config=yamlparser.load_yaml('config/config.yaml')
+	foldername = os.path.dirname(__file__)
+	if (len(foldername) > 0):
+		foldername+="/"
+	config=yamlparser.load_yaml(foldername + 'config/config.yaml')
 
 	_LOGGER.info("Init mqtt client.")
 	client = mqtt.Mqtt(config)
 	client.connect()
 	#only this devices can be controlled from MQTT
-	client.subscribe("light", "+", "+", "set")
-	
+	client.subscribe("light", "+", "set")
+
 	bulbs = init_lamps(config)
 
 	t1 = threading.Thread(target=process_lamp_states, args=[client])

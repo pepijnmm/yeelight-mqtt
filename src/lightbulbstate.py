@@ -1,15 +1,16 @@
 import pyyeelight
 import logging
+import math
 
 _LOGGER = logging.getLogger(__name__)
 
 class LightBulbState:
 	bright = 0
 	color_temperature = 0
-	status = "off"
+	status = "OFF"
 	rgb = 0
 	model = ""
-	
+
 	ip = ""
 	name = ""
 	yeelight = None # yeelight object
@@ -27,12 +28,12 @@ class LightBulbState:
 		# print(prop)
 		self.bright = prop["bright"]
 		self.color_temperature = prop["ct"]
-		self.status = prop["power"]
+		self.status = prop["power"].upper()
 		self.rgb = prop["rgb"]
 
 	def hash(self):
-		return str(self.bright) + ":" + str(self.color_temperature) + ":" + str(self.status) + ":" + str(self.rgb)
-	
+		return str(self.bright) + ":" + str(self.color_temperature) + ":" + str(self.status.upper()) + ":" + str(self.rgb)
+
 	def is_int(self, x):
 		try:
 			tmp = int(x)
@@ -40,27 +41,34 @@ class LightBulbState:
 		except Exception as e:
 			return False
 
-	def process_command(self, param, value):
+	def process_command(self, value):
+		_LOGGER.info("Turning on bulb: " + str(value['state']))
 		try:
-			if (param == 'status'):
-				if (value == "on"):
+			if "state" in value:
+				if (value['state'] == "on" or value['state'] == "ON"):
 					_LOGGER.info("Turning on bulb: " + self.name)
 					self.yeelight.turn_on()
-				if (value == "off"):
+				if (value['state'] == "off" or value['state']== "OFF"):
 					_LOGGER.info("Turning off bulb: " + self.name)
 					self.yeelight.turn_off()
-			if (param == 'bright' and self.is_int(value)):
-				_LOGGER.info("Setting brightness of bulb " + self.name + " to " + str(value))
-				self.yeelight.set_brightness(int(value))
-			if (param == 'ct' and self.is_int(value)):
-				_LOGGER.info("Setting temperature of bulb " + self.name + " to " + str(value))
-				self.yeelight.set_color_temperature(int(value))
-			if (param == 'rgb' and self.is_int(value)):
-				intval = int(value)
-				Blue =  intval & 255
-				Green = (intval >> 8) & 255
-				Red =   (intval >> 16) & 255
-				_LOGGER.info("Setting rgb of bulb", self.name, 'to', value)
+			if "brightness" in value:
+				brightness = math.ceil(value['brightness']/255*100)
+				_LOGGER.info("Setting brightness of bulb " + self.name + " to " + str(brightness))
+				self.yeelight.set_brightness(int(brightness))
+			if "color_temp" in value:
+				colorTemp = (4800/100*(100-100/347*(value['color_temp']-153))+1700)
+				_LOGGER.info("Setting temperature of bulb " + self.name + " to " + str(colorTemp))
+				self.yeelight.set_color_temperature(int(colorTemp))
+			if "color" in value:
+				Red = value['color']["r"]
+				Green = value['color']["g"]
+				Blue =  value['color']["b"]
+				#intval = int(value)
+				#Blue =  intval & 255
+				#Green = (intval >> 8) & 255
+				#Red =   (intval >> 16) & 255
+				_LOGGER.info("Setting rgb of bulb" + self.name +'to ' + str(Red)+" "+str(Green)+" "+str(Blue))
+
 				self.yeelight.set_rgb_color(Red, Green, Blue)
 		except Exception as e:
 			_LOGGER.error('Error while set value of bulb ' + self.name + ' error:', e)
