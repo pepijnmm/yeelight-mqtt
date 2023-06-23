@@ -47,16 +47,21 @@ class LightBulbState:
 			if "state" in value:
 				if (value['state'] == "on" or value['state'] == "ON"):
 					_LOGGER.info("Turning on bulb: " + self.name)
-					self.yeelight.turn_on()
+					if("brightness" not in value or "brightness" in value and int(value['brightness']) > 0):
+						self.yeelight.turn_on()
 				if (value['state'] == "off" or value['state']== "OFF"):
 					_LOGGER.info("Turning off bulb: " + self.name)
 					self.yeelight.turn_off()
 			if "brightness" in value:
-				brightness = math.ceil(value['brightness']/255*100)
+				brightness = int(math.ceil(int(value['brightness'])/255*100))
 				_LOGGER.info("Setting brightness of bulb " + self.name + " to " + str(brightness))
-				self.yeelight.set_brightness(int(brightness))
+				if(brightness==0):
+					self.yeelight.turn_off()
+					brightness=1
+				else:
+					self.yeelight.set_brightness(brightness)
 			if "color_temp" in value:
-				colorTemp = (4800/100*(100-100/347*(value['color_temp']-153))+1700)
+				colorTemp = (4800/100*(100-100/347*(int(value['color_temp'])-153))+1700)
 				_LOGGER.info("Setting temperature of bulb " + self.name + " to " + str(colorTemp))
 				self.yeelight.set_color_temperature(int(colorTemp))
 			if "color" in value:
